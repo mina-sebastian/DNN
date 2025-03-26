@@ -1,0 +1,4 @@
+datasets==3.4.1
+numpy==2.2.4
+torch==2.6.0+cu124
+transformers==4.50.0
