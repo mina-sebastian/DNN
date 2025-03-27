@@ -15,7 +15,11 @@ models = {}
 for model_id in model_ids:
     print(f"\nLoading model: {model_id}")
     tokenizer = AutoTokenizer.from_pretrained(model_id)
-    model = AutoModelForCausalLM.from_pretrained(model_id, torch_dtype=torch.float16).to(device)
+    model = AutoModelForCausalLM.from_pretrained(
+        model_id, 
+        device_map="auto", # let accelerate place layers across GPU/CPU
+        torch_dtype=torch.float16
+        ).to(device)
     models[model_id] = {
         "tokenizer": tokenizer,
         "model": model
