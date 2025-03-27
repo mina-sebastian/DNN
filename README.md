@@ -5,6 +5,8 @@ pip3 install torch torchvision torchaudio --index-url https://download.pytorch.o
 pip install transformers datasets accelerate
 pip install protobuf sentencepiece
 
+Pentru LLama3 e nevoie sa mergem pe pagina principala a modeluli -> log-in -> request access
+Dupa in terminalul proiectului:  `huggingface-cli login`
 
 https://huggingface.co/datasets/OpenLLM-Ro/ro_arc_challenge/viewer/default/train?row=1&views%5B%5D=train
 
@@ -14,4 +16,3 @@ TODO
 - download la roARC
 - de facut MLP
 - preprocesare embeddings pe fiecare model
-

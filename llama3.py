@@ -12,7 +12,7 @@ from torch.utils.data import Dataset
 from datasets_class import TitleContentDataset
 
 device = "cuda"
-model_id = "faur-ai/LLMic"
+model_id = "meta-llama/Meta-Llama-3.1-8B"
 
 tokenizer = AutoTokenizer.from_pretrained(model_id)
 model = AutoModel.from_pretrained(model_id).to(device)
@@ -50,45 +50,19 @@ def get_embedding(text):
 #     save_interval=200            
 # )
 
-test_dataset = TitleContentDataset(
-    csv_file="laroseda_test.csv",
-    get_embedding=get_embedding,  
-    type="test",
-    name="llmic",                 
-    emb_dim=2560,                
-    save_interval=200            
-)
+# test_dataset = TitleContentDataset(
+#     csv_file="laroseda_test.csv",
+#     get_embedding=get_embedding,  
+#     type="test",
+#     name="llmic",                 
+#     emb_dim=2560,                
+#     save_interval=200            
+# )
 
-# text1 = "Ana are mere"
-# text2 = "Ion are pere pe care le-a luat de la magazin"
+text1 = "Ana are mere"
+text2 = "Ion are pere pe care le-a luat de la magazin"
 
-# text1_embedding = get_embedding(text1)
-# text2_embedding = get_embedding(text2)
-# print(text1_embedding.shape, text2_embedding.shape)
-# print(text1_embedding, text2_embedding)
-
-# def chat(model, tokenizer, device):
-#     print("Enter 'quit' to exit.")
-#     while True:
-#         user_input = input("\nUser: ")
-#         if user_input.lower() in ["quit", "exit"]:
-#             break
-        
-#         # Prepare inputs
-#         inputs = tokenizer(user_input, return_tensors="pt").to(device)
-
-#         # Generate
-#         with torch.no_grad():
-#             output_ids = model.generate(
-#                 **inputs,
-#                 max_new_tokens=128,
-#                 do_sample=True,
-#                 top_p=0.9,
-#                 temperature=0.8
-#             )
-#         response = tokenizer.decode(output_ids[0], skip_special_tokens=True)
-        
-#         print(f"Model: {response}")
-
-# # Usage
-# chat(model, tokenizer, device)
+text1_embedding = get_embedding(text1)
+text2_embedding = get_embedding(text2)
+print(text1_embedding.shape, text2_embedding.shape)
+print(text1_embedding, text2_embedding)
