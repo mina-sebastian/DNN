@@ -211,4 +211,4 @@ class TitleContentDataset(Dataset):
         title_emb = torch.tensor(self.title_embs[idx], dtype=torch.float32)
         content_emb = torch.tensor(self.content_embs[idx], dtype=torch.float32)
         label = torch.tensor(self.labels[idx], dtype=torch.long)
-        return (title_emb, content_emb), label
+        return [title_emb, content_emb, label]

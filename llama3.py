@@ -127,15 +127,31 @@ def get_embedding(text, strategy="mean"):
         return pooled.squeeze().cpu().numpy()
 
 # ============== EXAMPLE USAGE ==============
+train_dataset = TitleContentDataset(
+    csv_file="laroseda_train.csv",
+    get_embedding=get_embedding,  
+    type="train",
+    name="llama3",                 
+    emb_dim=4096,                
+    save_interval=200            
+)
 
+test_dataset = TitleContentDataset(
+    csv_file="laroseda_test.csv",
+    get_embedding=get_embedding,  
+    type="test",
+    name="llama3",                 
+    emb_dim=4096,                
+    save_interval=200            
+)
 # test different strategies on sample sentences
-text1 = "Ana are mere"
-text2 = "Ion are pere pe care le-a luat de la magazin"
+# text1 = "Ana are mere"
+# text2 = "Ion are pere pe care le-a luat de la magazin"
 
-for strat in ["mean", "max", "last_token"]: # , "summary"
-    print(f"\n--- Testing strategy: {strat} ---")
-    emb1 = get_embedding(text1, strategy=strat)
-    emb2 = get_embedding(text2, strategy=strat)
-    print("Shapes:", emb1.shape, emb2.shape)
-    print("Sample embedding1:", emb1[:5], "...")
-    print("Sample embedding2:", emb2[:5], "...")
+# for strat in ["mean", "max", "last_token"]: # , "summary"
+#     print(f"\n--- Testing strategy: {strat} ---")
+#     emb1 = get_embedding(text1, strategy=strat)
+#     emb2 = get_embedding(text2, strategy=strat)
+#     print("Shapes:", emb1.shape, emb2.shape)
+#     print("Sample embedding1:", emb1[:5], "...")
+#     print("Sample embedding2:", emb2[:5], "...")
