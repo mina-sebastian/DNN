@@ -126,7 +126,6 @@ def get_embedding(text, strategy="mean"):
 
         return pooled.squeeze().cpu().numpy()
 
-# ============== EXAMPLE USAGE ==============
 train_dataset = TitleContentDataset(
     csv_file="laroseda_train.csv",
     get_embedding=get_embedding,  
