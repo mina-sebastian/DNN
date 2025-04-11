@@ -129,7 +129,7 @@ history, best_model = train_and_evaluate(
     criterion=nn.BCEWithLogitsLoss(),
     optimizer=optim.Adam(llmic_mlp.parameters(), lr=1e-3),
     num_epochs=10,
-    device=device
+    device=device,
 )
 
 plot_metrics(history)

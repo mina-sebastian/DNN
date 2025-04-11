@@ -43,13 +43,18 @@ def train_and_evaluate(model, train_loader, val_loader, optimizer, criterion,
         all_train_preds = []
         all_train_targets = []
 
-        for inputs_title, inputs_content, targets in tqdm(train_loader, desc=f'Epoch {epoch+1}/{num_epochs} - Training'):
-            inputs_title, inputs_content, targets = inputs_title.to(device), inputs_content.to(device), targets.float().to(device)
-
+        for dataInput in tqdm(train_loader, desc=f'Epoch {epoch+1}/{num_epochs} - Training'):
             optimizer.zero_grad()
+          
+            inputs_title, inputs_content, targets = dataInput
+            inputs_title, inputs_content = inputs_title.to(device), inputs_content.to(device)
+            if is_binary:
+                targets = targets.float().to(device)
+            else:
+                targets = targets.long().to(device)
             outputs = model(inputs_title, inputs_content)
-            # print("OUTPUTS:", outputs)
 
+                
             if is_binary:
                 if outputs.shape != targets.shape:
                     if outputs.dim() > targets.dim():
@@ -84,11 +89,15 @@ def train_and_evaluate(model, train_loader, val_loader, optimizer, criterion,
         all_val_targets = []
 
         with torch.no_grad():
-            for inputs_title, inputs_content, targets in tqdm(val_loader, desc=f'Epoch {epoch+1}/{num_epochs} - Validation'):
-                inputs_title, inputs_content, targets = inputs_title.to(device), inputs_content.to(device), targets.float().to(device)
-                # inputs, targets = inputs.to(device), targets.to(device)
+            for dataInput in tqdm(val_loader, desc=f'Epoch {epoch+1}/{num_epochs} - Validation'):
+                inputs_title, inputs_content, targets = dataInput
+                inputs_title, inputs_content = inputs_title.to(device), inputs_content.to(device)
+                if is_binary:
+                    targets = targets.float().to(device)
+                else:
+                    targets = targets.long().to(device)
                 outputs = model(inputs_title, inputs_content)
-
+            
                 if is_binary:
                     if outputs.shape != targets.shape:
                         if outputs.dim() > targets.dim():

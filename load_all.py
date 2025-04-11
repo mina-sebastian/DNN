@@ -4,10 +4,10 @@ import torch
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 model_ids = [
-    #"ai-forever/mGPT-1.3B-romanian",
+    "ai-forever/mGPT-1.3B-romanian",
     #"faur-ai/LLMic",
     #"OpenLLM-Ro/RoLlama2-7b-Instruct-2024-10-09",
-    "meta-llama/Meta-Llama-3.1-8B"
+    #"meta-llama/Meta-Llama-3.1-8B"
 ]
 
 models = {}
