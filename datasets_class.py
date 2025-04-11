@@ -210,5 +210,6 @@ class TitleContentDataset(Dataset):
         # Convert to torch Tensors if desired
         title_emb = torch.tensor(self.title_embs[idx], dtype=torch.float32)
         content_emb = torch.tensor(self.content_embs[idx], dtype=torch.float32)
-        label = torch.tensor(self.labels[idx], dtype=torch.long)
+        label = torch.tensor(self.labels[idx], dtype=torch.float32)
+        label = torch.where((label == 1) | (label == 2), 0, 1)
         return [title_emb, content_emb, label]
