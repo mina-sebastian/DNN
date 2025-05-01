@@ -1,173 +1,221 @@
 from typing import List
 import torch
 from torch.utils.data import DataLoader
-from datasets_class import TitleContentDataset
+from utils.base_model import BaseModel
+from utils.datasets_class import TitleContentDataset
 from torch.utils.data import random_split
 import torch.nn as nn
 import torch.optim as optim
 
 from collections import Counter
+from transformers import AutoModel, AutoTokenizer
 
-from models_dnn import DualInputMLP
-from train_util import evaluate_on_threshold, get_test_probs_targets, plot_metrics, train_and_evaluate
-device = "cuda"
-model_id = "faur-ai/LLMic"
+from utils.models_dnn import DualInputMLP
+from utils.train_util import test_model, train_and_evaluate
+from utils.get_embeddings import get_embedding
+from utils.base_model import LAROSEDA, ARC, LAROSEDA_TRAIN, LAROSEDA_TEST, ARC_TRAIN, ARC_TEST
 
-# HYPERPARAMS
-BATCH_SIZE = 32
+device = "cuda" if torch.cuda.is_available() else "cpu"
+# model_id = "faur-ai/LLMic"
 
-# tokenizer = AutoTokenizer.from_pretrained(model_id)
-# model_llmic = AutoModel.from_pretrained(model_id).to(device)
+# # HYPERPARAMS
+# BATCH_SIZE = 32
 
-
-def get_embedding(text):
-    inputs = tokenizer(
-        text,
-        return_tensors="pt",
-        truncation=True,
-        padding=True,
-        max_length=512
-    ).to(device)
-
-    with torch.no_grad():
-        outputs = model_llmic(**inputs)
-
-    hidden_states = outputs.last_hidden_state  # (batch, seq_len, hidden_dim)
-    # attention masks is needed to ignore padding and special tokens
-    attention_mask = inputs['attention_mask'].unsqueeze(-1)
-
-    masked_hidden = hidden_states * attention_mask
-    summed = masked_hidden.sum(dim=1)
-    counts = attention_mask.sum(dim=1)
-    mean_pooled = summed / counts
-
-    return mean_pooled.squeeze().cpu().numpy()
-
-full_dataset = TitleContentDataset(
-    csv_file="laroseda_train.csv",
-    get_embedding=get_embedding,  
-    type="train",
-    name="mGPT-1-3B-romanian",                 
-    emb_dim=2048,                
-    save_interval=200            
-)
-
-test_dataset = TitleContentDataset(
-    csv_file="laroseda_test.csv",
-    get_embedding=get_embedding,
-    type="test",
-    name="mGPT-1-3B-romanian",
-    emb_dim=2048,
-    save_interval=200
-)
-
-train_ratio = 0.8
-train_size = int(train_ratio * len(full_dataset))
-val_size = len(full_dataset) - train_size
-
-# Optional: set a manual seed for reproducible splits
-generator = torch.Generator().manual_seed(42)
-
-train_dataset, val_dataset = random_split(
-    full_dataset,
-    lengths=[train_size, val_size],
-    generator=generator
-)
-
-#Couners for the dataset
-print(f"Full dataset size: {Counter(full_dataset.labels)}")
-print(f"Train dataset size: {Counter(train_dataset.dataset.labels[train_dataset.indices])}")
-print(f"Val dataset size: {Counter(val_dataset.dataset.labels[val_dataset.indices])}")
-print(f"Test dataset size: {Counter(test_dataset.labels)}")
-
-print(f"Train samples: {len(train_dataset)}")
-print(f"Val samples: {len(val_dataset)}")
-
-# train_data, val_data = train_test_split(
-#     train_dataset, test_size=0.2, random_state=42, shuffle=True)
+# tokenizer = None
+# model_llmic = None
 
 
-# print(train_data[0])
-# train_data, train_labels = train_data[:, :-1], train_data[:, -1].float()
-# val_data, val_labels = val_data[:, :-1], val_data[:, -1].float()
+# def get_embedding_llmic(text):
+#     inputs = tokenizer(
+#         text,
+#         return_tensors="pt",
+#         truncation=True,
+#         padding=True,
+#         max_length=512
+#     ).to(device)
 
-# print(len(train_data), len(val_data))
+#     global tokenizer, model_llmic
+#     if tokenizer is None:
+#         tokenizer = AutoTokenizer.from_pretrained(model_id)
+#     if model_llmic is None:
+#         model_llmic = AutoModel.from_pretrained(model_id).to(device)
 
-# print("Train data:", train_data[0])
-# print("Validation data:", val_data[0])
+#     return get_embedding(
+#         model=model_llmic,
+#         tokenizer=tokenizer,
+#         text=text,
+#         strategy="mean"
+#     )
+    
 
-# print("Train data:", train_data[0])
 
-# train_dataset = TensorDataset(
-#     torch.tensor(train_data).float(),
-#     torch.tensor(train_labels).float()
+    
+
+# full_dataset = TitleContentDataset(
+#     csv_file="data/laroseda/laroseda_train.csv",
+#     get_embedding=get_embedding,  
+#     type="train",
+#     name="mGPT-1-3B-romanian",                 
+#     emb_dim=2048,                
+#     save_interval=200            
 # )
 
+# test_dataset = TitleContentDataset(
+#     csv_file="data/laroseda/laroseda_test.csv",
+#     get_embedding=get_embedding,
+#     type="test",
+#     name="mGPT-1-3B-romanian",
+#     emb_dim=2048,
+#     save_interval=200
+# )
 
-print(train_dataset[0])
-print(val_dataset[0])
+# train_ratio = 0.8
+# train_size = int(train_ratio * len(full_dataset))
+# val_size = len(full_dataset) - train_size
 
-train_dataloader = DataLoader(
-        train_dataset, 
-        batch_size=BATCH_SIZE, 
-        shuffle=True)
+# generator = torch.Generator().manual_seed(42)
 
-val_dataloader = DataLoader(
-        val_dataset, 
-        batch_size=BATCH_SIZE, 
-        shuffle=False)
+# train_dataset, val_dataset = random_split(
+#     full_dataset,
+#     lengths=[train_size, val_size],
+#     generator=generator
+# )
 
+# print(f"Full dataset size: {Counter(full_dataset.labels)}")
+# print(f"Train dataset size: {Counter(train_dataset.dataset.labels[train_dataset.indices])}")
+# print(f"Val dataset size: {Counter(val_dataset.dataset.labels[val_dataset.indices])}")
+# print(f"Test dataset size: {Counter(test_dataset.labels)}")
 
+# train_dataloader = DataLoader(
+#         train_dataset, 
+#         batch_size=BATCH_SIZE, 
+#         shuffle=True)
 
-
-llmic_mlp = DualInputMLP(input_dim=2048, hidden_dim=512).to(device)
-
-history, best_model = train_and_evaluate(
-    model=llmic_mlp,
-    train_loader=train_dataloader,
-    val_loader=val_dataloader,
-    criterion=nn.BCEWithLogitsLoss(),
-    optimizer=optim.Adam(llmic_mlp.parameters(), lr=1e-3),
-    num_epochs=10,
-    device=device,
-)
-
-plot_metrics(history)
-
-# # Save the model
-torch.save(best_model.state_dict(), "llmic_mlp_model.pth")
-# best_model = llmic_mlp
-# best_model.load_state_dict(torch.load("llmic_mlp_model.pth"))
-best_model.eval()
-probs_default, targets_test = get_test_probs_targets(best_model, test_dataset, device=device)
-
-rows = []
-acc, prec, rec, f1 = evaluate_on_threshold(probs_default, targets_test, 0.5)
-rows.append(["llmic", 0.5, acc, prec, rec, f1])
+# val_dataloader = DataLoader(
+#         val_dataset, 
+#         batch_size=BATCH_SIZE, 
+#         shuffle=False)
 
 
+# llmic_mlp = DualInputMLP(input_dim=2048, hidden_dim=512).to(device)
+
+# history, best_model = train_and_evaluate(
+#     model=llmic_mlp,
+#     train_loader=train_dataloader,
+#     val_loader=val_dataloader,
+#     criterion=nn.BCEWithLogitsLoss(),
+#     optimizer=optim.Adam(llmic_mlp.parameters(), lr=1e-3),
+#     num_epochs=10,
+#     device=device,
+#     name="llmic",
+#     save=True,
+#     do_all_metrics=True,
+# )
+# test_model(llmic_mlp, 'llmic', test_dataset, device=device)
 
 
-import pandas as pd
+class LLMicModel(BaseModel):
+    """
+    LLMic model class
+    """
+    def __init__(self, strategy: str, dataset: str,
+                 save_interval: int = 200, train_ratio: float = 0.8,
+                 BATCH_SIZE: int = 32):
+        super().__init__("LLMic", strategy, dataset, 2560,
+                         save_interval, train_ratio, BATCH_SIZE)
 
-df = pd.DataFrame(rows, columns=["Model", "Threshold", "Accuracy", "Precision", "Recall", "F1"])
-styled = df.style.highlight_max(axis=0, subset=["Accuracy", "Precision", "Recall", "F1"], color='red')
+    def get_embeddings_model(self, text: str) -> List[float]:
+        """
+        Get the embedding for the given text using LLMic model.
+        """
+        if self.tokenizer is None:
+            self.tokenizer = AutoTokenizer.from_pretrained("faur-ai/LLMic")
+        if self.model is None:
+            self.model = AutoModel.from_pretrained("faur-ai/LLMic").to(self.device)
+        
+        return get_embedding(
+            model=self.model,
+            tokenizer=self.tokenizer,
+            text=text,
+            strategy=self.strategy
+        )
 
-# show the table in a Jupyter Notebook
-# styled
-# Save the table to an HTML file
-styled.to_html("metrics.html")
+    def load_datasets(self):
+        """
+        Load the datasets for training and testing.
+        """
+        generator = torch.Generator().manual_seed(42)
+        if self.dataset == LAROSEDA:
+            self.full_dataset = TitleContentDataset(
+                csv_file=LAROSEDA_TRAIN,
+                get_embedding=self.get_embeddings_model,
+                type="train",
+                name=self.model_name,
+                emb_dim=self.emb_dim,
+                save_interval=self.save_interval
+            )
 
-# model = train_dual_mlp(llmic_mlp, train_dataloader, 
-#                         loss_criterion=nn.BCEWithLogitsLoss(), 
-#                         optimizer=optim.Adam(llmic_mlp.parameters(), lr=1e-3), 
-#                         epochs=10, 
-#                         device=device)
+            self.test_dataset = TitleContentDataset(
+                csv_file=LAROSEDA_TEST,
+                get_embedding=self.get_embeddings_model,
+                type="test",
+                name=self.model_name,
+                emb_dim=self.emb_dim,
+                save_interval=self.save_interval
+            )
 
-# text1 = "Ana are mere"
-# text2 = "Ion are pere pe care le-a luat de la magazin"
+            train_size = int(self.train_ratio * len(self.full_dataset))
+            val_size = len(self.full_dataset) - train_size
 
-# text1_embedding = get_embedding(text1)
-# text2_embedding = get_embedding(text2)
-# print(text1_embedding.shape, text2_embedding.shape)
-# print(text1_embedding, text2_embedding)
+            self.train_dataset, self.val_dataset = random_split(
+                self.full_dataset,
+                lengths=[train_size, val_size],
+                generator=generator
+            )
+
+            print(f"Full dataset size: {Counter(self.full_dataset.labels)}")
+            print(f"Train dataset size: {Counter(self.train_dataset.dataset.labels[self.train_dataset.indices])}")
+            print(f"Val dataset size: {Counter(self.val_dataset.dataset.labels[self.val_dataset.indices])}")
+            print(f"Test dataset size: {Counter(self.test_dataset.labels)}")
+
+            self.train_dataloader = DataLoader(
+                    self.train_dataset, 
+                    batch_size=self.BATCH_SIZE, 
+                    shuffle=True)
+
+            self.val_dataloader = DataLoader(
+                    self.val_dataset, 
+                    batch_size=self.BATCH_SIZE, 
+                    shuffle=False)
+            
+        elif self.dataset == ARC:
+            raise NotImplementedError("ARC dataset loading is not implemented yet.")
+        else:
+            raise ValueError(f"Unknown dataset: {self.dataset}")
+        
+    def train(self):
+        """
+        Train the model.
+        """
+        if self.train_dataloader is None or self.val_dataloader is None:
+            self.load_datasets()
+
+        self.mlp_model = DualInputMLP(input_dim=self.emb_dim, hidden_dim=512).to(self.device)
+
+        self.history, self.best_model = train_and_evaluate(
+            model=self.mlp_model,
+            train_loader=self.train_dataloader,
+            val_loader=self.val_dataloader,
+            criterion=nn.BCEWithLogitsLoss(),
+            optimizer=optim.Adam(self.mlp_model.parameters(), lr=1e-3),
+            num_epochs=10,
+            device=self.device,
+            name=self.model_name,
+            save=True,
+            do_all_metrics=True,
+        )
+
+        test_model(self.mlp_model, self.model_name, self.test_dataset, device=self.device)
+
+llmic_model = LLMicModel(strategy="mean", dataset=LAROSEDA)
+llmic_model.train()
