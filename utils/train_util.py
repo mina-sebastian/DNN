@@ -30,7 +30,8 @@ def get_path_model(model_name):
     return f"{directory}{get_current_date_formated()}_{model_name}_model.pth"
 
 def train_and_evaluate(model, train_loader, val_loader, optimizer, criterion,
-                       num_epochs=10, device='cuda', is_binary=True, name='unknown', save=True, do_all_metrics=True):
+                       num_epochs=10, device='cuda', is_binary=True, name='unknown',
+                       one_input=False, save=True, do_all_metrics=True):
     model = model.to(device)
     history = {
         'train_loss': [],
@@ -63,13 +64,23 @@ def train_and_evaluate(model, train_loader, val_loader, optimizer, criterion,
         for dataInput in tqdm(train_loader, desc=f'Epoch {epoch+1}/{num_epochs} - Training'):
             optimizer.zero_grad()
           
-            inputs_title, inputs_content, targets = dataInput
-            inputs_title, inputs_content = inputs_title.to(device), inputs_content.to(device)
+            if one_input:
+                inputs_title, targets = dataInput
+                inputs_title = inputs_title.to(device)
+                inputs_content = None
+            else:
+                inputs_title, inputs_content, targets = dataInput
+                inputs_title, inputs_content = inputs_title.to(device), inputs_content.to(device)
+            
             if is_binary:
                 targets = targets.float().to(device)
             else:
                 targets = targets.long().to(device)
-            outputs = model(inputs_title, inputs_content)
+
+            if one_input:
+                outputs = model(inputs_title)
+            else:
+                outputs = model(inputs_title, inputs_content)
 
                 
             if is_binary:
@@ -107,13 +118,23 @@ def train_and_evaluate(model, train_loader, val_loader, optimizer, criterion,
 
         with torch.no_grad():
             for dataInput in tqdm(val_loader, desc=f'Epoch {epoch+1}/{num_epochs} - Validation'):
-                inputs_title, inputs_content, targets = dataInput
-                inputs_title, inputs_content = inputs_title.to(device), inputs_content.to(device)
+                if one_input:
+                    inputs_title, targets = dataInput
+                    inputs_title = inputs_title.to(device)
+                    inputs_content = None
+                else:
+                    inputs_title, inputs_content, targets = dataInput
+                    inputs_title, inputs_content = inputs_title.to(device), inputs_content.to(device)
+
                 if is_binary:
                     targets = targets.float().to(device)
                 else:
                     targets = targets.long().to(device)
-                outputs = model(inputs_title, inputs_content)
+
+                if one_input:
+                    outputs = model(inputs_title)
+                else:
+                    outputs = model(inputs_title, inputs_content)
             
                 if is_binary:
                     if outputs.shape != targets.shape:

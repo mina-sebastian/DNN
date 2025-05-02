@@ -2,7 +2,7 @@ from typing import List
 import torch
 from torch.utils.data import DataLoader
 from utils.base_model import BaseModel
-from utils.datasets_class import MultipleChoiceSeparatedDataset, TitleContentDataset
+from utils.datasets_class import MultipleChoiceCombinedDataset, MultipleChoicePointwiseCached, MultipleChoiceSeparatedDataset, TitleContentDataset
 from torch.utils.data import random_split
 import torch.nn as nn
 import torch.optim as optim
@@ -10,7 +10,7 @@ import torch.optim as optim
 from collections import Counter
 from transformers import AutoModel, AutoTokenizer
 
-from utils.models_dnn import DualInputMLP, MultiOptionMLP
+from utils.models_dnn import DualInputMLP, MultiOptionMLP, OneOptionMLP
 from utils.train_util import test_model, train_and_evaluate
 from utils.get_embeddings import get_embedding
 from utils.base_model import LAROSEDA, ARC, LAROSEDA_TRAIN, LAROSEDA_TEST, ARC_TRAIN, ARC_TEST
@@ -189,12 +189,12 @@ class LLMicModel(BaseModel):
                     shuffle=False)
             
         elif self.dataset == ARC:
-            self.full_dataset = MultipleChoiceSeparatedDataset(
-                csv_file=ARC_TRAIN,
-                get_embedding=self.get_embeddings_model,
-                emb_dim=self.emb_dim,
-                name=f'roarc_train_{self.model_name.lower()}',
-            )
+            # self.full_dataset = MultipleChoiceSeparatedDataset(
+            #     csv_file=ARC_TRAIN,
+            #     get_embedding=self.get_embeddings_model,
+            #     emb_dim=self.emb_dim,
+            #     name=f'roarc_train_{self.model_name.lower()}',
+            # )
 
             # self.test_dataset = MultipleChoiceSeparatedDataset(
             #     csv_file=ARC_TEST,
@@ -202,6 +202,21 @@ class LLMicModel(BaseModel):
             #     emb_dim=self.emb_dim,
             #     name=f'roarc_test_{self.model_name.lower()}',
             # )
+
+            # self.full_dataset = MultipleChoicePointwiseCached(
+            #     csv_file=ARC_TRAIN,
+            #     get_embedding=self.get_embeddings_model,
+            #     emb_dim=self.emb_dim,
+            #     name=f'roarc_train_llmic',
+            # )
+
+            self.full_dataset = MultipleChoiceCombinedDataset(
+                csv_file=ARC_TRAIN,
+                get_embedding=self.get_embeddings_model,
+                emb_dim=self.emb_dim,
+                name=f'roarc_train_{self.model_name.lower()}_{self.strategy}',
+                save_interval=1
+            )
 
             print(f"Loaded {len(self.full_dataset)} samples.")
 
@@ -252,34 +267,53 @@ class LLMicModel(BaseModel):
                 optimizer=optim.Adam(self.mlp_model.parameters(), lr=1e-3),
                 num_epochs=10,
                 device=self.device,
-                name=f'{self.model_name}_laroseda',
+                name=f'{self.model_name}_{self.strategy}_laroseda',
                 save=True,
                 do_all_metrics=True,
             )
 
             test_model(self.mlp_model, f'{self.model_name}_laroseda', self.test_dataset, device=self.device)
         elif self.dataset == ARC:
-            self.mlp_model = MultiOptionMLP(
-                    input_dim=self.emb_dim,
-                    hidden_dim=1024,
-                ).to(self.device)
+            # self.mlp_model = MultiOptionMLP(
+            #         input_dim=self.emb_dim,
+            #         hidden_dim=1024,
+            #     ).to(self.device)
+
+            # self.history, self.best_model = train_and_evaluate(
+            #     model=self.mlp_model,
+            #     train_loader=self.train_dataloader,
+            #     val_loader=self.val_dataloader,
+            #     criterion=nn.CrossEntropyLoss(),
+            #     optimizer=optim.SGD(
+            #         self.mlp_model.parameters(),
+            #         lr=0.0001,
+            #         momentum=0.9,
+            #     ),
+            #     num_epochs=40,
+            #     device=self.device,
+            #     name=f'{self.model_name}_{self.strategy}_arc',
+            #     save=True,
+            #     do_all_metrics=True,
+            #     is_binary=True,
+            # )
+
+            self.mlp_model = OneOptionMLP(
+                input_dim=self.emb_dim,
+                hidden_dim=4096,
+            ).to(self.device)
 
             self.history, self.best_model = train_and_evaluate(
                 model=self.mlp_model,
                 train_loader=self.train_dataloader,
                 val_loader=self.val_dataloader,
-                criterion=nn.CrossEntropyLoss(),
-                optimizer=optim.SGD(
-                    self.mlp_model.parameters(),
-                    lr=0.0001,
-                    momentum=0.9,
-                ),
-                num_epochs=40,
+                criterion=nn.BCEWithLogitsLoss(pos_weight=torch.tensor(2).to(self.device)),
+                optimizer=optim.Adam(self.mlp_model.parameters(), lr=1e-3),
+                num_epochs=10,
                 device=self.device,
-                name=f'{self.model_name}_arc',
+                name=f'{self.model_name}_{self.strategy}_arc_new',
                 save=True,
+                one_input=True,
                 do_all_metrics=True,
-                is_binary=False,
             )
 
             # test_model(self.mlp_model, self.model_name, self.test_dataset, device=self.device)
@@ -287,4 +321,4 @@ class LLMicModel(BaseModel):
             raise ValueError(f"Unknown dataset: {self.dataset}")
 
 llmic_model = LLMicModel(strategy="mean", dataset=ARC)
-llmic_model.fit()
+llmic_model.load_datasets()

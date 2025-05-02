@@ -237,3 +237,27 @@ class MultiOptionMLP(nn.Module):
         x = self.drop(x)
         logits = self.fc2(x).squeeze(-1)          # [batch, 4]
         return logits
+
+
+class OneOptionMLP(nn.Module):
+    def __init__(self, input_dim: int, hidden_dim: int = 4096, dropout=0.3):
+        super().__init__()
+        in_dim      = input_dim          # q, a, |q-a|, q*a
+        self.fc1    = nn.Linear(in_dim, hidden_dim)
+        self.fc2    = nn.Linear(hidden_dim, 1)
+        self.fc2    = nn.Linear(hidden_dim, 2048)
+        self.fc3    = nn.Linear(2048, 512)
+        self.fc4    = nn.Linear(512, 1)
+        self.drop   = nn.Dropout(dropout)
+
+
+    def forward(self, emb):
+        x = self.norm(emb)                      # [batch, d]
+        x = F.relu(self.fc1(x))
+        x = self.drop(x)
+        x = F.relu(self.fc2(x))
+        x = self.drop(x)
+        x = F.relu(self.fc3(x))
+        x = self.drop(x)
+        logits = self.fc4(x).squeeze(-1)          # [batch, 1]
+        return logits
