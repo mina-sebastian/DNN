@@ -10,7 +10,7 @@ import torch.optim as optim
 from collections import Counter
 from transformers import AutoModel, AutoTokenizer
 
-from utils.models_dnn import DualInputMLP, MultiOptionMLP, OneOptionMLP
+from utils.models_dnn import DualInputMLP, MultiOptionMLP, OneOptionMLP, QuadricInputMLP
 from utils.train_util import test_model, train_and_evaluate
 from utils.get_embeddings import get_embedding
 from utils.base_model import LAROSEDA, ARC, LAROSEDA_TRAIN, LAROSEDA_TEST, ARC_TRAIN, ARC_TEST
@@ -297,7 +297,7 @@ class LLMicModel(BaseModel):
             #     is_binary=True,
             # )
 
-            self.mlp_model = OneOptionMLP(
+            self.mlp_model = QuadricInputMLP(
                 input_dim=self.emb_dim,
                 hidden_dim=4096,
             ).to(self.device)
@@ -306,14 +306,19 @@ class LLMicModel(BaseModel):
                 model=self.mlp_model,
                 train_loader=self.train_dataloader,
                 val_loader=self.val_dataloader,
-                criterion=nn.BCEWithLogitsLoss(pos_weight=torch.tensor(2).to(self.device)),
-                optimizer=optim.Adam(self.mlp_model.parameters(), lr=1e-3),
+                criterion=nn.CrossEntropyLoss(),
+                optimizer=optim.SGD(
+                    self.mlp_model.parameters(),
+                    lr=0.0001,
+                    momentum=0.9,
+                ),
                 num_epochs=10,
                 device=self.device,
-                name=f'{self.model_name}_{self.strategy}_arc_new',
+                name=f'{self.model_name}_{self.strategy}_arc_new_new',
                 save=True,
-                one_input=True,
+                is_binary=False,
                 do_all_metrics=True,
+                one_input=True
             )
 
             # test_model(self.mlp_model, self.model_name, self.test_dataset, device=self.device)
@@ -321,4 +326,4 @@ class LLMicModel(BaseModel):
             raise ValueError(f"Unknown dataset: {self.dataset}")
 
 llmic_model = LLMicModel(strategy="mean", dataset=ARC)
-llmic_model.load_datasets()
+llmic_model.fit()
