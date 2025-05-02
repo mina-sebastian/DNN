@@ -2,7 +2,7 @@ from typing import List
 import torch
 from torch.utils.data import DataLoader
 from utils.base_model import BaseModel
-from utils.datasets_class import TitleContentDataset
+from utils.datasets_class import MultipleChoiceSeparatedDataset, TitleContentDataset
 from torch.utils.data import random_split
 import torch.nn as nn
 import torch.optim as optim
@@ -10,7 +10,7 @@ import torch.optim as optim
 from collections import Counter
 from transformers import AutoModel, AutoTokenizer
 
-from utils.models_dnn import DualInputMLP
+from utils.models_dnn import DualInputMLP, MultiOptionMLP
 from utils.train_util import test_model, train_and_evaluate
 from utils.get_embeddings import get_embedding
 from utils.base_model import LAROSEDA, ARC, LAROSEDA_TRAIN, LAROSEDA_TEST, ARC_TRAIN, ARC_TEST
@@ -189,33 +189,102 @@ class LLMicModel(BaseModel):
                     shuffle=False)
             
         elif self.dataset == ARC:
-            raise NotImplementedError("ARC dataset loading is not implemented yet.")
+            self.full_dataset = MultipleChoiceSeparatedDataset(
+                csv_file=ARC_TRAIN,
+                get_embedding=self.get_embeddings_model,
+                emb_dim=self.emb_dim,
+                name=f'roarc_train_{self.model_name.lower()}',
+            )
+
+            # self.test_dataset = MultipleChoiceSeparatedDataset(
+            #     csv_file=ARC_TEST,
+            #     get_embedding=self.get_embeddings_model,
+            #     emb_dim=self.emb_dim,
+            #     name=f'roarc_test_{self.model_name.lower()}',
+            # )
+
+            print(f"Loaded {len(self.full_dataset)} samples.")
+
+            train_ratio = 0.8
+            train_size = int(train_ratio * len(self.full_dataset))
+            val_size = len(self.full_dataset) - train_size
+
+            self.train_dataset, self.val_dataset = random_split(
+                self.full_dataset,
+                lengths=[train_size, val_size],
+                generator=generator
+            )
+
+            print(f"Full dataset size: {Counter(self.full_dataset.labels)}")
+            print(f"Train dataset size: {Counter(self.train_dataset.dataset.labels[self.train_dataset.indices])}")
+            print(f"Val dataset size: {Counter(self.val_dataset.dataset.labels[self.val_dataset.indices])}")
+
+            print(f"Train samples: {len(self.train_dataset)}")
+            print(f"Val samples: {len(self.val_dataset)}")
+
+            self.train_dataloader = DataLoader(
+                    self.train_dataset, 
+                    batch_size=self.BATCH_SIZE, 
+                    shuffle=True)
+
+            self.val_dataloader = DataLoader(
+                    self.val_dataset, 
+                    batch_size=self.BATCH_SIZE, 
+                    shuffle=False)
         else:
             raise ValueError(f"Unknown dataset: {self.dataset}")
         
-    def train(self):
+    def fit(self):
         """
         Train the model.
         """
         if self.train_dataloader is None or self.val_dataloader is None:
             self.load_datasets()
 
-        self.mlp_model = DualInputMLP(input_dim=self.emb_dim, hidden_dim=512).to(self.device)
+        if self.dataset == LAROSEDA:
+            self.mlp_model = DualInputMLP(input_dim=self.emb_dim, hidden_dim=512).to(self.device)
 
-        self.history, self.best_model = train_and_evaluate(
-            model=self.mlp_model,
-            train_loader=self.train_dataloader,
-            val_loader=self.val_dataloader,
-            criterion=nn.BCEWithLogitsLoss(),
-            optimizer=optim.Adam(self.mlp_model.parameters(), lr=1e-3),
-            num_epochs=10,
-            device=self.device,
-            name=self.model_name,
-            save=True,
-            do_all_metrics=True,
-        )
+            self.history, self.best_model = train_and_evaluate(
+                model=self.mlp_model,
+                train_loader=self.train_dataloader,
+                val_loader=self.val_dataloader,
+                criterion=nn.BCEWithLogitsLoss(),
+                optimizer=optim.Adam(self.mlp_model.parameters(), lr=1e-3),
+                num_epochs=10,
+                device=self.device,
+                name=f'{self.model_name}_laroseda',
+                save=True,
+                do_all_metrics=True,
+            )
 
-        test_model(self.mlp_model, self.model_name, self.test_dataset, device=self.device)
+            test_model(self.mlp_model, f'{self.model_name}_laroseda', self.test_dataset, device=self.device)
+        elif self.dataset == ARC:
+            self.mlp_model = MultiOptionMLP(
+                    input_dim=self.emb_dim,
+                    hidden_dim=1024,
+                ).to(self.device)
 
-llmic_model = LLMicModel(strategy="mean", dataset=LAROSEDA)
-llmic_model.train()
+            self.history, self.best_model = train_and_evaluate(
+                model=self.mlp_model,
+                train_loader=self.train_dataloader,
+                val_loader=self.val_dataloader,
+                criterion=nn.CrossEntropyLoss(),
+                optimizer=optim.SGD(
+                    self.mlp_model.parameters(),
+                    lr=0.0001,
+                    momentum=0.9,
+                ),
+                num_epochs=40,
+                device=self.device,
+                name=f'{self.model_name}_arc',
+                save=True,
+                do_all_metrics=True,
+                is_binary=False,
+            )
+
+            # test_model(self.mlp_model, self.model_name, self.test_dataset, device=self.device)
+        else:
+            raise ValueError(f"Unknown dataset: {self.dataset}")
+
+llmic_model = LLMicModel(strategy="mean", dataset=ARC)
+llmic_model.fit()

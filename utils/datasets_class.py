@@ -6,14 +6,6 @@ from torch.utils.data import Dataset
 from tqdm import tqdm
 from collections import deque
 
-import os
-import numpy as np
-import pandas as pd
-import torch
-from torch.utils.data import Dataset
-from tqdm import tqdm
-from collections import deque
-
 
 ########## FOR LAROSEDA ##########
 class TitleContentDataset(Dataset):
@@ -65,7 +57,7 @@ class TitleContentDataset(Dataset):
             # Create TQDM bars
             self.main_pbar = tqdm(
                 total=self.num_samples,
-                desc="Computing embeddings",
+                desc=f'Processing {self.csv_file}',
                 initial=self.current_count,
                 position=1,
                 leave=True
@@ -456,8 +448,9 @@ class MultipleChoiceSeparatedDataset(Dataset):
         # Count already processed samples
         self.current_count = self._read_existing_count()
 
-        if self.current_count < self.num_samples:
-            self._compute_and_cache(get_embedding)
+        # if self.current_count < self.num_samples:
+        #     print(f"Detected {self.current_count}/{self.num_samples} already on disk. Resuming...")
+        #     self._compute_and_cache(get_embedding)
 
         self._load_full_arrays()
 
@@ -477,7 +470,7 @@ class MultipleChoiceSeparatedDataset(Dataset):
         opt_buffers = [[] for _ in range(self.num_options)]
         label_buffer = []
 
-        for idx in tqdm(range(self.current_count, self.num_samples), desc="Embedding MCQs"):
+        for idx in tqdm(range(self.current_count, self.num_samples), desc=f'Embedding {self.csv_file} MCQs'):
             row = self.df.iloc[idx]
 
             q_emb = get_embedding(str(row[self.question_col]))

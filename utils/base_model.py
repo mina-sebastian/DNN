@@ -52,7 +52,7 @@ class BaseModel:
         """
         raise NotImplementedError("Subclasses should implement the get_embeddings_model method.")
     
-    def train(self):
+    def fit(self):
         """
         Train the model.
         """
