@@ -261,3 +261,51 @@ class OneOptionMLP(nn.Module):
         x = self.drop(x)
         logits = self.fc4(x).squeeze(-1)          # [batch, 1]
         return logits
+    
+class QuadricInputMLP(nn.Module):
+    def __init__(self, input_dim=2560, hidden_dim=512, num_classes=4):
+        """
+        Example:
+        - input_dim = 2560 (dimension of LLMic embeddings)
+        - hidden_dim = 512  (feel free to adjust)
+        - num_classes = 4   (q classification)
+        """
+        super().__init__()
+
+        self.option_branches = nn.ModuleList([
+            nn.Sequential(
+                nn.Linear(input_dim, hidden_dim),
+                nn.ReLU(),
+                nn.Dropout(0.3)
+            ) for _ in range(4)
+        ])
+
+        # Combine both embeddings
+        self.combined = nn.Sequential(
+            nn.Linear(hidden_dim * 4, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(hidden_dim, num_classes)
+        )
+
+    def forward(self, option_embs):
+        """
+        :param q_emb: Tensor of shape (batch_size, emb_dim)
+        :param option_embs: Tensor of shape (batch_size, num_options, emb_dim)
+        :return: Tensor of shape (batch_size, num_classes)
+        """
+        
+        # Unpack options from the second dimension
+        # option_embs[:, 0] = option A, shape: [batch_size, emb_dim]
+        option_features = [
+            branch(option_embs[:, i])  # apply each branch to the i-th option
+            for i, branch in enumerate(self.option_branches)
+        ]  # each = [batch_size, hidden_dim]
+
+        # Concatenate along the feature dimension
+        combined_features = torch.cat(option_features, dim=1)  # [batch_size, hidden_dim * 4]
+
+        out = self.combined(combined_features)  # [batch_size, num_classes]
+        return out
+
+
