@@ -80,18 +80,18 @@ from utils.datasets_class import MultipleChoiceCombinedDataset, MultipleChoicePo
 
 
 
-dataset_multiple_sep = MultipleChoiceSeparatedDataset(
-                csv_file=ARC_TRAIN,
-                get_embedding=None,
-                emb_dim=2560,
-                name=f'roarc_train_llmic',
-            )
+# dataset_multiple_sep = MultipleChoiceSeparatedDataset(
+#                 csv_file=ARC_TRAIN,
+#                 get_embedding=None,
+#                 emb_dim=2560,
+#                 name=f'roarc_train_llmic',
+#             )
 
-print(f"Dataset size: {len(dataset_multiple_sep)}")
+# print(f"Dataset size: {len(dataset_multiple_sep)}")
 
-tsne = TSNE(n_components=2, random_state=42, n_iter=1000, perplexity=1, verbose=1)
-embeddings = []
-labels = []
+# tsne = TSNE(n_components=2, random_state=42, n_iter=1000, perplexity=1, verbose=1)
+# embeddings = []
+# labels = []
 # for i in range(len(dataset_multiple_sep)):
 #     data = dataset_multiple_sep[i]
 #     embeddings.append(data[0])
@@ -156,18 +156,21 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-tsne = TSNE(n_components=2, random_state=42, n_iter=1000, perplexity=30, verbose=1)
+tsne = TSNE(n_components=2, random_state=42, n_iter=1000, perplexity=1, verbose=1)
 embeddings = []
 labels = []
 
-for q in range(len(dataset_to_visualise)):
-    embs, label = dataset_to_visualise[q]
-    for i in range(len(embs)):
-        embeddings.append(embs[i])
-        if i == label:
-            labels.append(1)
-        else:
-            labels.append(0)
+# for q in range(len(dataset_to_visualise)):
+question, embs, label = dataset_to_visualise[40]
+for i in range(len(embs)):
+    embeddings.append(embs[i])
+    if i == label:
+        labels.append(1)
+    else:
+        labels.append(0)
+
+embeddings.append(question)
+labels.append(2)
 
 embeddings = np.array(embeddings)
 labels = np.array(labels)
