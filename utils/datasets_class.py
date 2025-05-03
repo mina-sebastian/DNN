@@ -716,3 +716,164 @@ class MultipleChoiceCombinedDataset(Dataset):
         opts = torch.stack([o[idx] for o in self.opt_embs])  # (num_options, emb_dim)
         label = self.labels[idx]
         return question, opts, label
+
+
+class MultipleChoiceCombinedDataset2(Dataset):
+    """MCQ dataset that keeps **only** the embeddings of
+    `(question + option_i)` for *i ∈ [0, num_options).*  
+    Stand‑alone question vectors are **not** stored – exactly as requested.
+
+    Parameters
+    ----------
+    csv_file : str
+        Path to the CSV with the columns
+        ``question_col``, ``options_cols``, and ``correct_col``.
+    get_embedding : Callable[[str], np.ndarray]
+        Function that returns a 1‑D NumPy array for a given text.
+    name : str
+        Prefix for the `.npy` files persisted under ``embeddings/roarc/combined``.
+    sep : str, default " \n "
+        Delimiter inserted between question and option when composing the text.
+    save_interval : int, default 100
+        After how many rows to flush intermediate results to disk.
+    """
+
+    def __init__(
+        self,
+        csv_file: str,
+        get_embedding: Callable[[str], np.ndarray],
+        name: str,
+        question_col: str = "instruction",
+        correct_col: str = "answer",
+        options_cols: Sequence[str] = ("option_a", "option_b", "option_c", "option_d"),
+        emb_dim: int = 768,
+        save_interval: int = 100,
+        sep: str = " \n ",
+    ) -> None:
+        super().__init__()
+        self.csv_file = csv_file
+        self.df = pd.read_csv(csv_file).reset_index(drop=True)
+        self.num_samples = len(self.df)
+        self.emb_dim = emb_dim
+        self.save_interval = save_interval
+        self.sep = sep
+
+        self.question_col = question_col
+        self.correct_col = correct_col
+        self.options_cols = tuple(options_cols)
+        self.num_options = len(self.options_cols)
+
+        # Cache directory & file templates
+        self.emb_dir = "embeddings/roarc"
+        os.makedirs(self.emb_dir, exist_ok=True)
+
+        self.q_emb_file = f"{self.emb_dir}/{name}_questions.npy"
+        self.opt_emb_files = [
+            f"{self.emb_dir}/{name}_option_{chr(97 + i)}.npy" for i in range(self.num_options)
+        ]
+        self.label_file = f"{self.emb_dir}/{name}_labels.npy"
+
+        # Resume if partial cache exists
+        self.current_count = self._read_existing_count()
+        # if self.current_count < self.num_samples:
+        #     print(
+        #         f"Embedding {self.csv_file}: {self.current_count}/{self.num_samples} rows cached. Resuming…"
+        #     )
+        #     self._compute_and_cache(get_embedding)
+
+        self._load_full_arrays()
+
+    # ------------------------------------------------------------------
+    # Disk IO helpers
+    # ------------------------------------------------------------------
+    def _read_existing_count(self) -> int:
+        """Returns rows already cached (0 if none/inconsistent)."""
+        if os.path.exists(self.q_emb_file) and all(os.path.exists(p) for p in self.opt_emb_files):
+            q = np.load(self.q_emb_file, mmap_mode="r")
+            opts = [np.load(p, mmap_mode="r") for p in self.opt_emb_files]
+            labels = np.load(self.label_file, mmap_mode="r")
+            if all(o.shape[0] == q.shape[0] == labels.shape[0] for o in opts):
+                return q.shape[0]
+        return 0
+
+    def _compute_and_cache(self, get_embedding: Callable[[str], np.ndarray]) -> None:
+        # Buffers
+        q_buffer: list[np.ndarray] = []
+        opt_buffers: list[list[np.ndarray]] = [[] for _ in range(self.num_options)]
+        label_buffer: list[int] = []
+
+        for idx in tqdm(range(self.current_count, self.num_samples), desc="Embedding rows"):
+            row = self.df.iloc[idx]
+            q_text = str(row[self.question_col])
+            q_emb = get_embedding(q_text)
+            q_buffer.append(q_emb)
+
+            # Correct label
+            correct_letter = str(row[self.correct_col]).strip().upper()
+            correct_index = ord(correct_letter) - ord("A")
+            label_buffer.append(correct_index)
+
+            # Embed every combined text
+            for i, opt_col in enumerate(self.options_cols):
+                combined_text = f"{q_text}{self.sep}{str(row[opt_col])}"
+                emb = get_embedding(combined_text)
+                opt_buffers[i].append(emb)
+
+            # Flush periodically
+            if len(label_buffer) >= self.save_interval:
+                self._append_to_disk(q_buffer, opt_buffers, label_buffer)
+                label_buffer.clear()
+                for buf in opt_buffers:
+                    buf.clear()
+
+        # Flush remaining
+        if label_buffer:
+            self._append_to_disk(q_buffer, opt_buffers, label_buffer)
+
+    def _append_to_disk(self, questions: list[np.ndarray], opts: list[list[np.ndarray]], labels: list[int]) -> None:
+        o_arrs = [np.asarray(buf, dtype=np.float32) for buf in opts]
+        l_arr = np.asarray(labels, dtype=np.int64)
+        q_arr = np.asarray(questions, dtype=np.float32)
+
+        if os.path.exists(self.label_file):
+            o_old = [np.load(p) for p in self.opt_emb_files]
+            l_old = np.load(self.label_file)
+            q_old = np.load(self.q_emb_file)
+
+            o_combined = [np.concatenate([old, new]) for old, new in zip(o_old, o_arrs)]
+            l_combined = np.concatenate([l_old, l_arr])
+            q_combined = np.concatenate([q_old, q_arr])
+        else:
+            o_combined = o_arrs
+            l_combined = l_arr
+            q_combined = q_arr
+
+
+        for path, arr in zip(self.opt_emb_files, o_combined):
+            np.save(path, arr)
+        np.save(self.label_file, l_combined)
+        np.save(self.q_emb_file, q_combined)
+
+        self.current_count = l_combined.shape[0]
+
+    def _load_full_arrays(self) -> None:
+        self.opt_embs = [torch.from_numpy(np.load(p)) for p in self.opt_emb_files]
+        self.labels = torch.from_numpy(np.load(self.label_file))
+        self.q_embs = torch.from_numpy(np.load(self.q_emb_file))
+
+    # ------------------------------------------------------------------
+    # Dataset API
+    # ------------------------------------------------------------------
+    def __len__(self) -> int:  # type: ignore[override]
+        return self.labels.size(0)
+
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:  # type: ignore[override]
+        """Returns ``(opt_embs, label)``.
+
+        * ``opt_embs`` – tensor of shape ``(num_options, emb_dim)``.
+        * ``label`` – scalar ``torch.long`` index of the correct option (0‑based).
+        """
+        question = self.q_embs[idx]  # (emb_dim,)
+        opts = torch.stack([o[idx] for o in self.opt_embs])  # (num_options, emb_dim)
+        label = self.labels[idx]
+        return question, opts, label
