@@ -442,3 +442,59 @@ class PairwiseQuadricWithQueryMLP(nn.Module):
         # Stack final logits
         logits = torch.stack(scores, dim=1)  # [batch, 4]
         return logits
+
+
+
+
+
+# class ArcMLP(nn.Module):
+#     def __init__(self, input_dim: int = 768, hidden_dim: int = 512):
+#         super().__init__()
+#         self.scorer = nn.Sequential(
+#             nn.Linear(2 * input_dim, hidden_dim),
+#             nn.ReLU(),
+#             nn.Linear(hidden_dim, 1)  # Score scalar
+#         )
+
+#     def forward(self, q: torch.Tensor, q_plus_opts: torch.Tensor):
+#         """
+#         q: (batch_size, emb_dim)
+#         q_plus_opts: (batch_size, num_options, emb_dim)
+#         Returns:
+#             scores: (batch_size, num_options)
+#         """
+#         batch_size, num_options, emb_dim = q_plus_opts.shape
+
+#         # Expand question to match number of options
+#         q_expanded = q.unsqueeze(1).expand(-1, num_options, -1)  # (B, 4, 768)
+
+#         # Concatenate along the embedding dim
+#         combined = torch.cat([q_expanded, q_plus_opts], dim=-1)  # (B, 4, 1536)
+
+#         # Flatten for MLP processing
+#         combined_flat = combined.view(-1, 2 * emb_dim)  # (B*4, 1536)
+
+#         scores = self.scorer(combined_flat).view(batch_size, num_options)  # (B, 4)
+#         return scores
+    
+class ArcMLP(nn.Module):
+    def __init__(self, input_dim=768, hidden_dim=256, use_q=True):
+        super().__init__()
+        self.use_q = use_q
+        self.scorer = nn.Sequential(
+            nn.Linear(input_dim * (2 if use_q else 1), hidden_dim),
+            nn.ReLU(),
+            nn.LayerNorm(hidden_dim),
+            nn.Linear(hidden_dim, 1)
+        )
+
+    def forward(self, q: torch.Tensor, q_plus_opts: torch.Tensor):
+        B, O, D = q_plus_opts.shape
+        if self.use_q:
+            q_exp = q.unsqueeze(1).expand(-1, O, -1)  # (B, 4, D)
+            combined = torch.cat([q_exp, q_plus_opts], dim=-1)  # (B, 4, 2D)
+        else:
+            combined = q_plus_opts  # (B, 4, D)
+
+        scores = self.scorer(combined.view(-1, combined.shape[-1]))  # (B*4, 1)
+        return scores.view(B, O)  # (B, 4)

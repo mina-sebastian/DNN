@@ -10,7 +10,8 @@ import torch.optim as optim
 from collections import Counter
 from transformers import AutoModel, AutoTokenizer
 
-from utils.models_dnn import DualInputMLP, MultiOptionMLP, OneOptionMLP, PairwiseQuadricMLP, PairwiseQuadricWithQueryMLP, QuadricInputMLP, SharedInputMLP
+from utils.models_dnn import ArcMLP, DualInputMLP, MultiOptionMLP, OneOptionMLP, PairwiseQuadricMLP, PairwiseQuadricWithQueryMLP, QuadricInputMLP, SharedInputMLP
+from utils.pairwise_loss import PairwiseRankingLoss
 from utils.train_util import test_model, train_and_evaluate
 from utils.get_embeddings import get_embedding
 from utils.base_model import LAROSEDA, ARC, LAROSEDA_TRAIN, LAROSEDA_TEST, ARC_TRAIN, ARC_TEST
@@ -297,7 +298,7 @@ class LLMicModel(BaseModel):
             #     is_binary=True,
             # )
 
-            self.mlp_model = PairwiseQuadricWithQueryMLP(
+            self.mlp_model = ArcMLP(
                 input_dim=self.emb_dim,
                 hidden_dim=self.emb_dim * 2,
             ).to(self.device)
@@ -306,7 +307,7 @@ class LLMicModel(BaseModel):
                 model=self.mlp_model,
                 train_loader=self.train_dataloader,
                 val_loader=self.val_dataloader,
-                criterion=nn.CrossEntropyLoss(),
+                criterion=PairwiseRankingLoss(),
                 # optimizer = optim.AdamW(self.mlp_model.parameters(), lr=1e-4, weight_decay=1e-4),
                 # optimizer=optim.Adam(self.mlp_model.parameters(), lr=1e-4),
                 # optimizer=optim.SGD(self.mlp_model.parameters(), lr=1e-5, momentum=0.4),
@@ -316,13 +317,13 @@ class LLMicModel(BaseModel):
                     momentum=0.9,
                 ),
                 # use_scheduler=True,
-                num_epochs=50,
+                num_epochs=25,
                 device=self.device,
                 name=f'{self.model_name}_{self.strategy}_arc_new_new',
                 save=True,
                 is_binary=False,
                 do_all_metrics=True,
-                one_input=True
+                # one_input=True
             )
 
             # test_model(self.mlp_model, self.model_name, self.test_dataset, device=self.device)
