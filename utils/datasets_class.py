@@ -663,6 +663,7 @@ class MultipleChoiceCombinedDataset(Dataset):
                 label_buffer.clear()
                 for buf in opt_buffers:
                     buf.clear()
+                q_buffer.clear()
 
         # Flush remaining
         if label_buffer:
