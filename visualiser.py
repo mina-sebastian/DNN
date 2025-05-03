@@ -2,7 +2,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 from sklearn.manifold import TSNE
 from utils.base_model import ARC_TRAIN, LAROSEDA_TRAIN
-from utils.datasets_class import MultipleChoicePointwiseCached, MultipleChoiceSeparatedDataset, TitleContentDataset
+from utils.datasets_class import MultipleChoiceCombinedDataset, MultipleChoicePointwiseCached, MultipleChoiceSeparatedDataset, TitleContentDataset
 
 ##################### ROARC EMBEDDINGS #####################
 # dataset_to_visualise = MultipleChoicePointwiseCached(
@@ -137,15 +137,18 @@ labels = []
 
 
 ##################### ROARC EMBEDDINGS #####################
-dataset_to_visualise = MultipleChoicePointwiseCached(
+dataset_to_visualise = MultipleChoiceCombinedDataset(
                 csv_file=ARC_TRAIN,
                 get_embedding=None,
                 emb_dim=2560,
-                name=f'roarc_train_llmic',
+                name=f'roarc_train_llmic_mean',
+                save_interval=1
             )
 
+sample_idx = 0
+
 print(f"Dataset size: {len(dataset_to_visualise)}")
-print(f'Sample: {dataset_to_visualise[0]}')
+print(f'Sample: {dataset_to_visualise[sample_idx]}')
 
 #tsne visualisation
 from sklearn.manifold import TSNE
@@ -156,10 +159,16 @@ import numpy as np
 tsne = TSNE(n_components=2, random_state=42, n_iter=1000, perplexity=30, verbose=1)
 embeddings = []
 labels = []
-for i in range(len(dataset_to_visualise)):
-    data = dataset_to_visualise[i]
-    embeddings.append(data[0])
-    labels.append(data[1])
+
+for q in range(len(dataset_to_visualise)):
+    embs, label = dataset_to_visualise[q]
+    for i in range(len(embs)):
+        embeddings.append(embs[i])
+        if i == label:
+            labels.append(1)
+        else:
+            labels.append(0)
+
 embeddings = np.array(embeddings)
 labels = np.array(labels)
 embeddings = tsne.fit_transform(embeddings)
@@ -170,4 +179,4 @@ plt.colorbar()
 plt.title('t-SNE visualization of embeddings')
 plt.xlabel('t-SNE component 1')
 plt.ylabel('t-SNE component 2')
-plt.savefig('tsne_visualisation.png')
+plt.savefig('tsne_visualisation_new.png')

@@ -10,7 +10,7 @@ import torch.optim as optim
 from collections import Counter
 from transformers import AutoModel, AutoTokenizer
 
-from utils.models_dnn import DualInputMLP, MultiOptionMLP, OneOptionMLP, QuadricInputMLP
+from utils.models_dnn import DualInputMLP, MultiOptionMLP, OneOptionMLP, PairwiseQuadricMLP, PairwiseQuadricWithQueryMLP, QuadricInputMLP, SharedInputMLP
 from utils.train_util import test_model, train_and_evaluate
 from utils.get_embeddings import get_embedding
 from utils.base_model import LAROSEDA, ARC, LAROSEDA_TRAIN, LAROSEDA_TEST, ARC_TRAIN, ARC_TEST
@@ -297,9 +297,9 @@ class LLMicModel(BaseModel):
             #     is_binary=True,
             # )
 
-            self.mlp_model = QuadricInputMLP(
+            self.mlp_model = PairwiseQuadricWithQueryMLP(
                 input_dim=self.emb_dim,
-                hidden_dim=4096,
+                hidden_dim=self.emb_dim * 2,
             ).to(self.device)
 
             self.history, self.best_model = train_and_evaluate(
@@ -307,12 +307,16 @@ class LLMicModel(BaseModel):
                 train_loader=self.train_dataloader,
                 val_loader=self.val_dataloader,
                 criterion=nn.CrossEntropyLoss(),
+                # optimizer = optim.AdamW(self.mlp_model.parameters(), lr=1e-4, weight_decay=1e-4),
+                # optimizer=optim.Adam(self.mlp_model.parameters(), lr=1e-4),
+                # optimizer=optim.SGD(self.mlp_model.parameters(), lr=1e-5, momentum=0.4),
                 optimizer=optim.SGD(
                     self.mlp_model.parameters(),
                     lr=0.0001,
                     momentum=0.9,
                 ),
-                num_epochs=10,
+                # use_scheduler=True,
+                num_epochs=50,
                 device=self.device,
                 name=f'{self.model_name}_{self.strategy}_arc_new_new',
                 save=True,

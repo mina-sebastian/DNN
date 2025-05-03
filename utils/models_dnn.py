@@ -309,3 +309,136 @@ class QuadricInputMLP(nn.Module):
         return out
 
 
+class SharedInputMLP(nn.Module):
+    def __init__(self, input_dim=2560, hidden_dim=512, num_classes=4):
+        super().__init__()
+
+        # One shared branch applied to all options
+        self.shared_branch = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(0.3)
+        )
+
+        # Combined classifier head
+        self.combined = nn.Sequential(
+            nn.Linear(hidden_dim * 4, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            # nn.Linear(hidden_dim * 2, hidden_dim),
+            # nn.ReLU(),
+            # nn.Dropout(0.3),
+            nn.Linear(hidden_dim, num_classes)
+        )
+
+    def forward(self, option_embs):
+        # Apply the same branch to each option
+        option_features = [self.shared_branch(option_embs[:, i]) for i in range(4)]
+        combined_features = torch.cat(option_features, dim=1)  # [batch_size, hidden_dim * 4]
+        out = self.combined(combined_features)  # [batch_size, num_classes]
+        return out
+
+class PairwiseQuadricMLP(nn.Module):
+    def __init__(self, input_dim=2560, hidden_dim=512, num_classes=4):
+        super().__init__()
+
+        # Shared or independent encoders for each option (your choice)
+        self.option_branch = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(0.3)
+        )
+
+        # Pairwise comparison MLP (same for all pairs)
+        self.pairwise_comparator = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim // 2),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(hidden_dim // 2, 1)  # scalar score for this pair
+        )
+
+        # Final scoring layer (per option)
+        self.final_classifier = nn.Linear(6, num_classes)  # 6 comparisons
+
+    def forward(self, option_embs):
+        """
+        :param option_embs: Tensor of shape (batch_size, 4, input_dim)
+        :return: Tensor of shape (batch_size, num_classes)
+        """
+        batch_size = option_embs.size(0)
+
+        # Step 1: Encode each option
+        encoded = [self.option_branch(option_embs[:, i]) for i in range(4)]  # list of 4 tensors [batch, hidden_dim]
+
+        # Step 2: Pairwise differences
+        diffs = []
+        indices = []
+        for i in range(4):
+            for j in range(i + 1, 4):
+                diff = torch.abs(encoded[i] - encoded[j])  # [batch, hidden_dim]
+                diffs.append(self.pairwise_comparator(diff))  # [batch, 1]
+                indices.append((i, j))
+
+        # Step 3: Build pairwise matrix [batch, 4, 4] and count "wins"
+        scores = torch.zeros(batch_size, 4, device=option_embs.device)
+
+        for idx, (i, j) in enumerate(indices):
+            s_ij = diffs[idx].squeeze(1)  # [batch]
+            scores[:, i] += s_ij
+            scores[:, j] += -s_ij  # opposite sign: i wins → j loses
+
+        return scores  # logits for 4 options
+
+
+
+
+
+import torch
+import torch.nn as nn
+
+class PairwiseQuadricWithQueryMLP(nn.Module):
+    def __init__(self, input_dim=2560, hidden_dim=512, num_classes=4):
+        super().__init__()
+
+        # Shared encoder for each option
+        self.option_encoder = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(0.3)
+        )
+
+        # Shared comparator for each (option - query) pair
+        self.scoring_mlp = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(hidden_dim, hidden_dim//2),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(hidden_dim//2, 1)  # score for how well option matches query
+        )
+
+    def forward(self, option_embs):
+        """
+        :param option_embs: Tensor of shape (batch_size, 4, input_dim)
+        :return: Tensor of shape (batch_size, 4)
+        """
+        batch_size = option_embs.size(0)
+
+        # Step 1: Encode options individually
+        encoded_options = [self.option_encoder(option_embs[:, i]) for i in range(4)]  # list of 4 x [batch, hidden_dim]
+
+        # Step 2: Compute pseudo-query (mean of all options)
+        stacked_options = torch.stack(encoded_options, dim=1)  # [batch, 4, hidden_dim]
+        query = torch.mean(stacked_options, dim=1)  # [batch, hidden_dim]
+
+        # Step 3: Score each option against query
+        scores = []
+        for i in range(4):
+            diff = torch.abs(encoded_options[i] - query)  # [batch, hidden_dim]
+            score = self.scoring_mlp(diff).squeeze(1)  # [batch]
+            scores.append(score)
+
+        # Stack final logits
+        logits = torch.stack(scores, dim=1)  # [batch, 4]
+        return logits

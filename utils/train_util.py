@@ -12,6 +12,7 @@ from sklearn.metrics import (
     recall_score,
 )
 from tqdm import tqdm
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 def get_current_date_formated():
     from datetime import datetime
@@ -31,7 +32,7 @@ def get_path_model(model_name):
 
 def train_and_evaluate(model, train_loader, val_loader, optimizer, criterion,
                        num_epochs=10, device='cuda', is_binary=True, name='unknown',
-                       one_input=False, save=True, do_all_metrics=True):
+                       one_input=False, save=True, do_all_metrics=True, use_scheduler=False):
     model = model.to(device)
     history = {
         'train_loss': [],
@@ -53,6 +54,9 @@ def train_and_evaluate(model, train_loader, val_loader, optimizer, criterion,
     best_val_f1 = -float('inf')
     best_model = None
     best_epoch = -1
+
+    if use_scheduler:
+        scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=2, verbose=True)
 
     for epoch in range(num_epochs):
         # Training Phase
@@ -160,6 +164,9 @@ def train_and_evaluate(model, train_loader, val_loader, optimizer, criterion,
             all_val_targets, all_val_preds, average='binary' if is_binary else 'weighted', zero_division=0
         )
         val_cm = confusion_matrix(all_val_targets, all_val_preds)
+
+        if use_scheduler:
+            scheduler.step(val_f1)
 
         history['train_loss'].append(train_loss)
         history['val_loss'].append(val_loss)
