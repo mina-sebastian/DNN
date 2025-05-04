@@ -472,3 +472,6 @@ models/LLMic_mean_arc_new_new/03-05-2025_16-24_LLMic_mean_arc_new_new_model.pth
 models/LLMic_mean_arc_new_new/03-05-2025_16-26_LLMic_mean_arc_new_new_model.pth
 models/LLMic_mean_arc_new_new/03-05-2025_16-36_LLMic_mean_arc_new_new_model.pth
 models/LLMic_mean_arc_new_new/03-05-2025_16-43_LLMic_mean_arc_new_new_model.pth
+models/LLMic_mean_arc_new_new/04-05-2025_10-45_LLMic_mean_arc_new_new_model.pth
+.gitignore
+models/LLMic_mean_arc_new_new/04-05-2025_10-50_LLMic_mean_arc_new_new_model.pth
