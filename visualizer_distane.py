@@ -6,9 +6,9 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 
 from utils.base_model import ARC_TRAIN
-from utils.datasets_class import MultipleChoiceCombinedDataset                  # nice progress bar
+from utils.datasets_class import MultipleChoiceCombinedDataset, MultipleChoiceCombinedDataset2                  # nice progress bar
 
-USE_COSINE = False   # True → cosine distance, False → Euclidean (L2)
+USE_COSINE = True   # True → cosine distance, False → Euclidean (L2)
 SAVE_FIGS  = True    # set False if you don’t want PNGs
 
 def pair_distance(a: np.ndarray, b: np.ndarray) -> float:
@@ -34,7 +34,15 @@ dataset_to_visualise = MultipleChoiceCombinedDataset(
                 save_interval=1
             )
 
-for q_idx in tqdm(range(1000), desc="Scanning dataset"):
+# dataset_to_visualise = MultipleChoiceCombinedDataset2(
+#                 csv_file=ARC_TRAIN,
+#                 get_embedding=None,
+#                 emb_dim=2560,
+#                 name=f'roarc_train_llmic',
+#                 save_interval=1
+#             )
+
+for q_idx in tqdm(range(499), desc="Scanning dataset"):
     q_vec, opt_vecs, correct_idx = dataset_to_visualise[q_idx]  # tensors
     q_vec      = q_vec.numpy()
     opt_vecs   = opt_vecs.numpy()          # shape: (num_options, emb_dim)
@@ -64,7 +72,7 @@ plt.ylabel("‖q − (q+nearest wrong)‖")
 plt.title("Question → Option distances")
 plt.tight_layout()
 if SAVE_FIGS:
-    plt.savefig("scatter_distances.png", dpi=160)
+    plt.savefig("scatter_distances_combbined.png", dpi=160)
 plt.show()
 
 # -------------------------------------------------------------
@@ -78,5 +86,5 @@ plt.ylabel("Number of questions")
 plt.title("Margin: is the correct option closer?")
 plt.tight_layout()
 if SAVE_FIGS:
-    plt.savefig("histogram_margins.png", dpi=160)
+    plt.savefig("histogram_margins_combined.png", dpi=160)
 plt.show()

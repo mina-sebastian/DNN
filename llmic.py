@@ -317,7 +317,7 @@ class LLMicModel(BaseModel):
                     momentum=0.9,
                 ),
                 # use_scheduler=True,
-                num_epochs=25,
+                num_epochs=50,
                 device=self.device,
                 name=f'{self.model_name}_{self.strategy}_arc_new_new',
                 save=True,

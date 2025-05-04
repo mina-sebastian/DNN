@@ -4,19 +4,10 @@ import torch.nn.functional as F
 
 class PairwiseRankingLoss(nn.Module):
     """
-    Margin-based pairwise loss for multiple-choice QA.
-
     For each sample:
         - The correct option should be scored higher than each incorrect one
         - Enforces: score_correct - score_wrong >= margin
         - Aggregates the loss over all incorrect options
-
-    Parameters:
-    ----------
-    margin : float
-        Minimum desired difference between correct and incorrect scores.
-    reduction : str
-        'mean' or 'sum' over the batch losses.
     """
 
     def __init__(self, margin: float = 0.5, reduction: str = "mean"):
@@ -25,21 +16,7 @@ class PairwiseRankingLoss(nn.Module):
         self.reduction = reduction
 
     def forward(self, scores: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
-        """
-        Parameters
-        ----------
-        scores : torch.Tensor
-            Tensor of shape (B, num_options) — predicted scores for each option.
-        labels : torch.Tensor
-            Tensor of shape (B,) — correct answer index (0–num_options-1) for each example.
-
-        Returns
-        -------
-        torch.Tensor
-            Scalar loss value.
-        """
         B, num_options = scores.shape
-        device = scores.device
 
         total_loss = []
         for i in range(B):
