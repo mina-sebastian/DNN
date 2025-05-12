@@ -330,5 +330,5 @@ class LLMicModel(BaseModel):
         else:
             raise ValueError(f"Unknown dataset: {self.dataset}")
 
-llmic_model = LLMicModel(strategy="mean", dataset=ARC)
+llmic_model = LLMicModel(strategy="echo", dataset=ARC)
 llmic_model.fit()

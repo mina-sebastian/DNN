@@ -19,13 +19,13 @@ def get_current_date_formated():
     return datetime.now().strftime("%d-%m-%Y_%H-%M")
 
 def get_path_metrics(model_name, metric_name):
-    directory = f"metrics/{model_name}/{get_current_date_formated()}/"
+    directory = f"metrics/final/{model_name}/{get_current_date_formated()}/"
     if not os.path.exists(directory):
         os.makedirs(directory)
     return f"{directory}{model_name}_{metric_name}"
 
 def get_path_model(model_name):
-    directory = f"models/{model_name}/"
+    directory = f"models/final/{model_name}/"
     if not os.path.exists(directory):
         os.makedirs(directory)
     return f"{directory}{get_current_date_formated()}_{model_name}_model.pth"
@@ -196,8 +196,11 @@ def train_and_evaluate(model, train_loader, val_loader, optimizer, criterion,
     model.load_state_dict(best_model)
     print(f'Best model from epoch {best_epoch+1} with Validation F1: {best_val_f1:.4f}')
     if save:
-        torch.save(model.state_dict(), get_path_model(name))
-        print(f'Model saved to {get_path_model(name)}')
+        path = get_path_model(name)
+        if not os.path.exists(os.path.dirname(path)):
+            os.makedirs(os.path.dirname(path))
+        torch.save(model.state_dict(), path)
+        print(f'Model saved to {path}')
     if do_all_metrics:
         plot_metrics(history, name)
         plot_confusion_matrix_evolution(history, name)
@@ -255,7 +258,11 @@ def plot_metrics(history, name, figsize=(20, 15), class_names=None):
 
     plt.tight_layout()
     # plt.savefig(get_current_date_formated()+'metrics_plot_llmic.png')
-    plt.savefig(get_path_metrics(name, 'metrics.png'))
+    file_path = get_path_metrics(name, 'metrics.png')
+    if not os.path.exists(os.path.dirname(file_path)):
+        os.makedirs(os.path.dirname(file_path))
+    plt.savefig(file_path)
+    # plt.savefig(get_path_metrics(name, 'metrics.png'))
     
 
     if 'train_cm' in history and 'val_cm' in history:
@@ -282,7 +289,10 @@ def plot_metrics(history, name, figsize=(20, 15), class_names=None):
 
         plt.tight_layout()
         # plt.savefig('confusion_matrix_plot_llmic.png')
-        plt.savefig(get_path_metrics(name, 'confusion_matrix.png'))
+        file_path = get_path_metrics(name, 'confusion_matrix.png')
+        if not os.path.exists(os.path.dirname(file_path)):
+            os.makedirs(os.path.dirname(file_path))
+        plt.savefig(file_path)
 
 def plot_confusion_matrix_evolution(history, name, figsize=(15, 10), class_names=None, epochs_to_plot=None):
     if 'val_cm' not in history:
@@ -327,7 +337,10 @@ def plot_confusion_matrix_evolution(history, name, figsize=(15, 10), class_names
 
     plt.tight_layout()
     # plt.savefig('confusion_matrix_evolution_plot_llmic.png')
-    plt.savefig(get_path_metrics(name, 'confusion_matrix_evolution.png'))
+    file_path = get_path_metrics(name, 'confusion_matrix_evolution.png')
+    if not os.path.exists(os.path.dirname(file_path)):
+        os.makedirs(os.path.dirname(file_path))
+    plt.savefig(file_path)
 
 
 
@@ -339,13 +352,13 @@ def evaluate_on_threshold(probs, targets, threshold):
     f1 = f1_score(targets, preds)
     return acc, prec, rec, f1
 
-def get_test_probs_targets(model, test_loader, device='cuda'):
+def get_test_probs_targets(model, test_loader, device='cuda', roarc=False):
     model.eval()
-    all_probs = []
+    all_preds = []
     all_targets = []
+
     with torch.no_grad():
         for inputs_title, inputs_content, targets in tqdm(test_loader, desc='Testing'):
-            # Ensure 2D shape even for batch_size=1
             if inputs_title.dim() == 1:
                 inputs_title = inputs_title.unsqueeze(0)
             if inputs_content.dim() == 1:
@@ -355,24 +368,44 @@ def get_test_probs_targets(model, test_loader, device='cuda'):
 
             inputs_title = inputs_title.to(device)
             inputs_content = inputs_content.to(device)
-            targets = targets.float().to(device)
+            targets = targets.to(device)
 
-            outputs = model(inputs_title, inputs_content)
-            probs = torch.sigmoid(outputs).view(-1)
-            targets = targets.view(-1)
+            if roarc:
+                # Add batch dim if needed
+                inputs_content = inputs_content.unsqueeze(0)
+                outputs = model(inputs_title, inputs_content)
+                probs = torch.softmax(outputs, dim=1)  # shape: (B, num_options)
+                preds = torch.argmax(probs, dim=1)
+            else:
+                outputs = model(inputs_title, inputs_content)
+                probs = torch.sigmoid(outputs).view(-1)
+                preds = (probs > 0.5).float()
 
-            all_probs.append(probs.cpu().numpy())
-            all_targets.append(targets.cpu().numpy())
+            preds = preds.view(-1).cpu().numpy()
+            targets = targets.view(-1).cpu().numpy()
 
-    return np.concatenate(all_probs), np.concatenate(all_targets)
+            all_preds.append(preds)
+            all_targets.append(targets)
+
+    return np.concatenate(all_preds), np.concatenate(all_targets)
 
 
-def test_model(model, name, test_loader, device):
+
+def test_model(model, name, test_loader, device, roarc=False):
     model.eval()
-    probs_default, targets_test = get_test_probs_targets(model, test_loader, device=device)
-    acc, prec, rec, f1 = evaluate_on_threshold(probs_default, targets_test, 0.5)
-    # save accuracy, precision, recall, f1 to a new file
-    with open(get_path_metrics(name, 'test_results.txt'), 'w') as f:
+    preds, targets = get_test_probs_targets(model, test_loader, device=device, roarc=roarc)
+
+    if roarc:
+        acc = accuracy_score(targets, preds)
+        prec, rec, f1, _ = precision_recall_fscore_support(targets, preds, average='weighted')
+    else:
+        acc, prec, rec, f1 = evaluate_on_threshold(preds, targets, 0.5)
+
+
+    file_path = get_path_metrics(name, 'test_results.txt')
+    if not os.path.exists(os.path.dirname(file_path)):
+        os.makedirs(os.path.dirname(file_path))
+    with open(file_path, 'w') as f:
         f.write(f"Accuracy: {acc}\n")
         f.write(f"Precision: {prec}\n")
         f.write(f"Recall: {rec}\n")
@@ -381,4 +414,5 @@ def test_model(model, name, test_loader, device):
     print(f"Precision: {prec}")
     print(f"Recall: {rec}")
     print(f"F1 Score: {f1}")
-    return probs_default, targets_test, acc, prec, rec, f1
+
+    return preds, targets, acc, prec, rec, f1

@@ -42,6 +42,15 @@ class TitleContentDataset(Dataset):
         self.content_emb_file = f"embeddings/{name}_{type}_content_embeddings.npy"
         self.label_file = f"embeddings/{name}_{type}_labels.npy"
 
+        if not os.path.exists(os.path.dirname(self.title_emb_file)):
+            os.makedirs(os.path.dirname(self.title_emb_file), exist_ok=True)
+        
+        if not os.path.exists(os.path.dirname(self.content_emb_file)):
+            os.makedirs(os.path.dirname(self.content_emb_file), exist_ok=True)
+        
+        if not os.path.exists(os.path.dirname(self.label_file)):
+            os.makedirs(os.path.dirname(self.label_file), exist_ok=True)
+
         # Make sure directory exists
         os.makedirs("embeddings", exist_ok=True)
 
